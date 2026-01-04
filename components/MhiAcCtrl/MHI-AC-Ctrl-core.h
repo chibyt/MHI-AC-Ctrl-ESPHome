@@ -31,6 +31,9 @@ const byte opdata[][2] PROGMEM = {
 #define NoFramesPerOpDataCycle 400             // number of frames used for a OpData request cycle; will be 20s (20 frames are 1s)
 #define minTimeInternalTroom 5000              // minimal time in ms used for Troom internal sensor changes for publishing to avoid jitter 
 
+// Uncomment the line below to enable debug printing of SPI frames
+//#define DEBUG_SPI_FRAMES 
+
 // Declare extern variables for the pins the only change to the original code
 // This allows to set the pins in the configuration file
 extern int SCK_PIN;

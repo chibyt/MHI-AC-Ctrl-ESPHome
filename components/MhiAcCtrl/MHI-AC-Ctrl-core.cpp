@@ -233,11 +233,18 @@ static byte MOSI_frame[33];
     checksum = calc_checksumFrame33(MISO_frame);
     MISO_frame[CBL2] = lowByte(checksum);
   }
-  //Serial.println();
-  //Serial.print(F("MISO:"));
+  
+#ifdef DEBUG_SPI_FRAMES
+  // Print MISO frame (data being sent to AC)
+  Serial.print(F("MISO: "));
+  for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
+    Serial.printf("%02x ", MISO_frame[byte_cnt]);
+  }
+  Serial.println();
+#endif
+
   // read/write MOSI/MISO frame
   for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) { // read and write a data packet of 20 bytes
-    //Serial.printf("x%02x ", MISO_frame[byte_cnt]);
     MOSI_byte = 0;
     byte bit_mask = 1;
     for (uint8_t bit_cnt = 0; bit_cnt < 8; bit_cnt++) { // read and write 1 byte
@@ -272,6 +279,17 @@ static byte MOSI_frame[33];
     if ( MOSI_frame[CBL2] != lowByte(checksum ) ) 
       return err_msg_invalid_checksum;
   }
+
+#ifdef DEBUG_SPI_FRAMES
+  // Print MOSI frame (data received from AC) only when new data is received
+  if (new_datapacket_received) {
+    Serial.print(F("MOSI: "));
+    for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
+      Serial.printf("%02x ", MOSI_frame[byte_cnt]);
+    }
+    Serial.println();
+  }
+#endif
 
   if (new_datapacket_received) {
 
