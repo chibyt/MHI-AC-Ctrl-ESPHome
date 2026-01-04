@@ -3,6 +3,10 @@
 
 #include "MHI-AC-Ctrl-core.h"
 
+// Use ESPHome logging
+#include "esphome/core/log.h"
+static const char* TAG_SPI = "mhi.spi";
+
 uint16_t calc_checksum(byte* frame) {
   uint16_t checksum = 0;
   for (int i = 0; i < CBH; i++)
@@ -236,11 +240,13 @@ static byte MOSI_frame[33];
   
 #ifdef DEBUG_SPI_FRAMES
   // Print MISO frame (data being sent to AC)
-  Serial.print(F("MISO: "));
+  char miso_buf[200];
+  char *p = miso_buf;
+  p += sprintf(p, "MISO: ");
   for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
-    Serial.printf("%02x ", MISO_frame[byte_cnt]);
+    p += sprintf(p, "%02x ", MISO_frame[byte_cnt]);
   }
-  Serial.println();
+  ESP_LOGD(TAG_SPI, "%s", miso_buf);
 #endif
 
   // read/write MOSI/MISO frame
@@ -283,11 +289,13 @@ static byte MOSI_frame[33];
 #ifdef DEBUG_SPI_FRAMES
   // Print MOSI frame (data received from AC) only when new data is received
   if (new_datapacket_received) {
-    Serial.print(F("MOSI: "));
+    char mosi_buf[200];
+    char *p = mosi_buf;
+    p += sprintf(p, "MOSI: ");
     for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
-      Serial.printf("%02x ", MOSI_frame[byte_cnt]);
+      p += sprintf(p, "%02x ", MOSI_frame[byte_cnt]);
     }
-    Serial.println();
+    ESP_LOGD(TAG_SPI, "%s", mosi_buf);
   }
 #endif
 
