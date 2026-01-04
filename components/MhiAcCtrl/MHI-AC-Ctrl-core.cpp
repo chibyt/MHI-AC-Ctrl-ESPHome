@@ -275,15 +275,47 @@ static byte MOSI_frame[33];
   }
 
   checksum = calc_checksum(MOSI_frame);
-  if (((MOSI_frame[SB0] & 0xfe) != 0x6c) | (MOSI_frame[SB1] != 0x80) | (MOSI_frame[SB2] != 0x04))
+  if (((MOSI_frame[SB0] & 0xfe) != 0x6c) | (MOSI_frame[SB1] != 0x80) | (MOSI_frame[SB2] != 0x04)) {
+    // Always log invalid signature errors - critical for debugging
+    char err_buf[250];
+    char *p = err_buf;
+    p += sprintf(p, "INVALID_SIGNATURE - MOSI: ");
+    for (uint8_t byte_cnt = 0; byte_cnt < frameSize && byte_cnt < 20; byte_cnt++) {
+      p += sprintf(p, "%02x ", MOSI_frame[byte_cnt]);
+    }
+    p += sprintf(p, "| Expected SB0:6c/6d SB1:80 SB2:04 | Got SB0:%02x SB1:%02x SB2:%02x", 
+                 MOSI_frame[SB0], MOSI_frame[SB1], MOSI_frame[SB2]);
+    ESP_LOGW(TAG_SPI, "%s", err_buf);
     return err_msg_invalid_signature;
-  if ((MOSI_frame[CBH] << 8 | MOSI_frame[CBL]) != checksum)
+  }
+  if ((MOSI_frame[CBH] << 8 | MOSI_frame[CBL]) != checksum) {
+    // Always log checksum errors - important for debugging
+    char err_buf[250];
+    char *p = err_buf;
+    p += sprintf(p, "INVALID_CHECKSUM - MOSI: ");
+    for (uint8_t byte_cnt = 0; byte_cnt < frameSize && byte_cnt < 20; byte_cnt++) {
+      p += sprintf(p, "%02x ", MOSI_frame[byte_cnt]);
+    }
+    p += sprintf(p, "| Expected: %04x | Got: %02x%02x", checksum, MOSI_frame[CBH], MOSI_frame[CBL]);
+    ESP_LOGW(TAG_SPI, "%s", err_buf);
     return err_msg_invalid_checksum;
+  }
 
   if (frameSize == 33) { // Only for framesize 33 (WF-RAC)
     checksum = calc_checksumFrame33(MOSI_frame);
-    if ( MOSI_frame[CBL2] != lowByte(checksum ) ) 
+    if ( MOSI_frame[CBL2] != lowByte(checksum ) ) {
+#ifdef DEBUG_SPI_FRAMES
+      char err_buf[250];
+      char *p = err_buf;
+      p += sprintf(p, "INVALID_CHECKSUM33 - MOSI: ");
+      for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
+        p += sprintf(p, "%02x ", MOSI_frame[byte_cnt]);
+      }
+      p += sprintf(p, "| Expected CBL2: %02x | Got: %02x", lowByte(checksum), MOSI_frame[CBL2]);
+      ESP_LOGW(TAG_SPI, "%s", err_buf);
+#endif
       return err_msg_invalid_checksum;
+    }
   }
 
 #ifdef DEBUG_SPI_FRAMES

@@ -60,7 +60,15 @@ void MhiPlatform::loop() {
 
     int ret = mhi_ac_ctrl_core_.loop(100);
     if (ret < 0) {
-        ESP_LOGE(TAG, "mhi_ac_ctrl_core,loop error: %i", ret);
+        const char* error_msg = "";
+        switch (ret) {
+            case -1: error_msg = "invalid_signature"; break;
+            case -2: error_msg = "invalid_checksum"; break;
+            case -3: error_msg = "timeout_SCK_low"; break;
+            case -4: error_msg = "timeout_SCK_high"; break;
+            default: error_msg = "unknown"; break;
+        }
+        ESP_LOGE(TAG, "mhi_ac_ctrl_core.loop error: %i (%s)", ret, error_msg);
     }
 }
 
