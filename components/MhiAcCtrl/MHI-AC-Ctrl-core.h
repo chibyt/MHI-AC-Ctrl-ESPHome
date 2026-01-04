@@ -32,7 +32,7 @@ const byte opdata[][2] PROGMEM = {
 #define minTimeInternalTroom 5000              // minimal time in ms used for Troom internal sensor changes for publishing to avoid jitter 
 
 // Uncomment the line below to enable debug printing of SPI frames
-//#define DEBUG_SPI_FRAMES 
+#define DEBUG_SPI_FRAMES 
 
 // Declare extern variables for the pins the only change to the original code
 // This allows to set the pins in the configuration file
