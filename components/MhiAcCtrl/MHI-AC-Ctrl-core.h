@@ -169,6 +169,10 @@ class MHI_AC_Ctrl_Core {
 
     CallbackInterface_Status *m_cbiStatus;
 
+#ifdef USE_ESP8266
+    bool hw_spi_initialized_;
+#endif
+
   public:
     void MHIAcCtrlStatus(CallbackInterface_Status *cb) {
       m_cbiStatus = cb;

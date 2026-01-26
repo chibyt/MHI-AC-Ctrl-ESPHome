@@ -7,6 +7,10 @@
 #include "esphome/core/log.h"
 static const char* TAG_SPI = "mhi.spi";
 
+#ifdef USE_ESP8266
+#include "esp8266_peri.h"
+#endif
+
 uint16_t calc_checksum(byte* frame) {
   uint16_t checksum = 0;
   for (int i = 0; i < CBH; i++)
@@ -58,9 +62,23 @@ void MHI_AC_Ctrl_Core::reset_old_values() {  // used e.g. when MQTT connection t
 
 void MHI_AC_Ctrl_Core::init() {
   //MeasureFrequency(m_cbiStatus);
+  
+#ifdef USE_ESP8266
+  // Configure pins for hardware-accelerated GPIO access
+  // Using ESP8266 GPIO registers directly for faster bit operations
   pinMode(SCK_PIN, INPUT);
   pinMode(MOSI_PIN, INPUT);
   pinMode(MISO_PIN, OUTPUT);
+  
+  hw_spi_initialized_ = true;
+  ESP_LOGI(TAG_SPI, "ESP8266 hardware-accelerated GPIO initialized for SPI");
+#else
+  pinMode(SCK_PIN, INPUT);
+  pinMode(MOSI_PIN, INPUT);
+  pinMode(MISO_PIN, OUTPUT);
+  hw_spi_initialized_ = false;
+#endif
+  
   MHI_AC_Ctrl_Core::reset_old_values();
 }
 
@@ -250,20 +268,92 @@ static byte MOSI_frame[33];
 #endif
 
   // read/write MOSI/MISO frame
-  for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) { // read and write a data packet of 20 bytes
+#ifdef USE_ESP8266
+  if (hw_spi_initialized_) {
+    // Use ESP8266 hardware GPIO registers for faster bit operations
+    // Direct register access for maximum performance
+    // Register addresses: GPI=0x60000318, GPOS=0x60000304, GPOC=0x60000308
+    #define ESP8266_GPIO_IN_REG  0x60000318
+    #define ESP8266_GPIO_OUT_SET_REG  0x60000304
+    #define ESP8266_GPIO_OUT_CLEAR_REG  0x60000308
+    
+    volatile uint32_t *gpio_in = (volatile uint32_t *)ESP8266_GPIO_IN_REG;
+    volatile uint32_t *gpio_out_set = (volatile uint32_t *)ESP8266_GPIO_OUT_SET_REG;
+    volatile uint32_t *gpio_out_clear = (volatile uint32_t *)ESP8266_GPIO_OUT_CLEAR_REG;
+    
+    uint32_t sck_mask = (1 << SCK_PIN);
+    uint32_t mosi_mask = (1 << MOSI_PIN);
+    uint32_t miso_mask = (1 << MISO_PIN);
+    
+    for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
+      MOSI_byte = 0;
+      byte bit_mask = 1;
+      for (uint8_t bit_cnt = 0; bit_cnt < 8; bit_cnt++) {
+        SCKMillis = millis();
+        // Wait for falling edge using direct GPIO register access
+        while (*gpio_in & sck_mask) {
+          if (millis() - startMillis > max_time_ms)
+            return err_msg_timeout_SCK_high;
+        }
+        // Set MISO pin using direct GPIO register access (much faster)
+        if ((MISO_frame[byte_cnt] & bit_mask) > 0)
+          *gpio_out_set = miso_mask;
+        else
+          *gpio_out_clear = miso_mask;
+        // Wait for rising edge
+        while (!(*gpio_in & sck_mask)) {}
+        // Read MOSI pin using direct GPIO register access
+        if (*gpio_in & mosi_mask)
+          MOSI_byte += bit_mask;
+        bit_mask = bit_mask << 1;
+      }
+      if (MOSI_frame[byte_cnt] != MOSI_byte) {
+        new_datapacket_received = true;
+        MOSI_frame[byte_cnt] = MOSI_byte;
+      }
+    }
+  } else {
+    // Fallback to software SPI
+    for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
+      MOSI_byte = 0;
+      byte bit_mask = 1;
+      for (uint8_t bit_cnt = 0; bit_cnt < 8; bit_cnt++) {
+        SCKMillis = millis();
+        while (digitalRead(SCK_PIN)) {
+          if (millis() - startMillis > max_time_ms)
+            return err_msg_timeout_SCK_high;
+        } 
+        if ((MISO_frame[byte_cnt] & bit_mask) > 0)
+          digitalWrite(MISO_PIN, 1);
+        else
+          digitalWrite(MISO_PIN, 0);
+        while (!digitalRead(SCK_PIN)) {}
+        if (digitalRead(MOSI_PIN))
+          MOSI_byte += bit_mask;
+        bit_mask = bit_mask << 1;
+      }
+      if (MOSI_frame[byte_cnt] != MOSI_byte) {
+        new_datapacket_received = true;
+        MOSI_frame[byte_cnt] = MOSI_byte;
+      }
+    }
+  }
+#else
+  // Non-ESP8266: Use standard software SPI
+  for (uint8_t byte_cnt = 0; byte_cnt < frameSize; byte_cnt++) {
     MOSI_byte = 0;
     byte bit_mask = 1;
-    for (uint8_t bit_cnt = 0; bit_cnt < 8; bit_cnt++) { // read and write 1 byte
+    for (uint8_t bit_cnt = 0; bit_cnt < 8; bit_cnt++) {
       SCKMillis = millis();
-      while (digitalRead(SCK_PIN)) { // wait for falling edge
+      while (digitalRead(SCK_PIN)) {
         if (millis() - startMillis > max_time_ms)
-          return err_msg_timeout_SCK_high;       // SCK stuck@ high error detection
+          return err_msg_timeout_SCK_high;
       } 
       if ((MISO_frame[byte_cnt] & bit_mask) > 0)
         digitalWrite(MISO_PIN, 1);
       else
         digitalWrite(MISO_PIN, 0);
-      while (!digitalRead(SCK_PIN)) {} // wait for rising edge
+      while (!digitalRead(SCK_PIN)) {}
       if (digitalRead(MOSI_PIN))
         MOSI_byte += bit_mask;
       bit_mask = bit_mask << 1;
@@ -273,6 +363,7 @@ static byte MOSI_frame[33];
       MOSI_frame[byte_cnt] = MOSI_byte;
     }
   }
+#endif
 
   checksum = calc_checksum(MOSI_frame);
   if (((MOSI_frame[SB0] & 0xfe) != 0x6c) | (MOSI_frame[SB1] != 0x80) | (MOSI_frame[SB2] != 0x04)) {
