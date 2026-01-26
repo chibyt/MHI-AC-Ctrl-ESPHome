@@ -165,7 +165,7 @@ static byte MOSI_frame[33];
    
   call_counter++;
   int SCKMillis = millis();               // time of last SCK low level
-  while (millis() - SCKMillis < 5) {      // wait for 5ms stable high signal to detect a frame start
+  while (millis() - SCKMillis < 15) {      // wait for 15ms stable high signal to detect a frame start
     if (!digitalRead(SCK_PIN))
       SCKMillis = millis();
     if (millis() - startMillis > max_time_ms)
