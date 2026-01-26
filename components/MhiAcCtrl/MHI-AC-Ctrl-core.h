@@ -31,9 +31,6 @@ const byte opdata[][2] PROGMEM = {
 #define NoFramesPerOpDataCycle 400             // number of frames used for a OpData request cycle; will be 20s (20 frames are 1s)
 #define minTimeInternalTroom 5000              // minimal time in ms used for Troom internal sensor changes for publishing to avoid jitter 
 
-// Uncomment this line to use gpio optimisation
-#define USE_ESP8266
-
 // Uncomment the line below to enable debug printing of SPI frames
 #define DEBUG_SPI_FRAMES 
 
